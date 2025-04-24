@@ -1,5 +1,22 @@
 # FFmpeg Video Cropping Tool
 
+## 预览
+
+![upload](assets/upload.jpg)
+
+![clip](assets/clip.jpg)
+
+## 提示词
+
+```prompt
+需求：用ffmpeg裁切视频指定坐标。
+实现逻辑：
+- 1. 前后端分离
+- 2. 前端用React技术栈，后端用FastAPI
+- 3. 用户上传视频可以预览，并且可以用自定义选择框
+- 4. 用鼠标拖拉可以选择指定要裁切的框，点击确定生成指定裁切后的视频
+```
+
 This application allows users to upload videos, preview them, select a specific region using a draggable selection box, and crop the video using FFmpeg.
 
 ## Features
