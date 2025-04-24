@@ -1,7 +1,8 @@
 import React from "react";
-import { Box, Button, Stack, Typography } from "@mui/material";
+import { Box, Button, Stack, Typography, Chip } from "@mui/material";
 import DownloadIcon from "@mui/icons-material/Download";
 import RestartAltIcon from "@mui/icons-material/RestartAlt";
+import MonochromePhotosIcon from "@mui/icons-material/MonochromePhotos";
 import axios from "axios";
 
 const ResultVideo = ({ croppedVideo, onReset }) => {
@@ -44,6 +45,15 @@ const ResultVideo = ({ croppedVideo, onReset }) => {
     <Box sx={{ width: "100%", textAlign: "center" }}>
       <Typography variant="h6" gutterBottom>
         Cropped Video Result
+        {croppedVideo.grayscale && (
+          <Chip
+            icon={<MonochromePhotosIcon />}
+            label="灰度视频"
+            color="primary"
+            size="small"
+            sx={{ ml: 1 }}
+          />
+        )}
       </Typography>
 
       <Box sx={{ my: 3 }}>
@@ -63,6 +73,7 @@ const ResultVideo = ({ croppedVideo, onReset }) => {
             {Math.round(croppedVideo.cropArea.y)}, Width:{" "}
             {Math.round(croppedVideo.cropArea.width)}, Height:{" "}
             {Math.round(croppedVideo.cropArea.height)}
+            {croppedVideo.grayscale && ", Grayscale: Yes"}
           </Box>
         )}
       </Typography>

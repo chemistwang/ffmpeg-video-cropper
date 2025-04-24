@@ -3,7 +3,7 @@ import uuid
 import ffmpeg
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException
 from fastapi.responses import FileResponse
-from typing import Optional
+from typing import Optional, bool
 import aiofiles
 import shutil
 from fastapi.logger import logger
@@ -49,7 +49,8 @@ async def crop_video(
     x: int = Form(...),
     y: int = Form(...),
     width: int = Form(...),
-    height: int = Form(...)
+    height: int = Form(...),
+    grayscale: bool = Form(False)
 ):
     """Crop a video using FFmpeg"""
     input_path = os.path.join(UPLOAD_DIR, filename)
@@ -57,19 +58,35 @@ async def crop_video(
     if not os.path.exists(input_path):
         raise HTTPException(status_code=404, detail="Video not found")
     
+    # 如果是字符串，需要转换为布尔值
+    if isinstance(grayscale, str):
+        grayscale = grayscale.lower() == 'true'
+    
     # Generate output filename
-    output_filename = f"cropped_{uuid.uuid4()}{os.path.splitext(filename)[1]}"
+    prefix = "grayscale_" if grayscale else "cropped_"
+    output_filename = f"{prefix}{uuid.uuid4()}{os.path.splitext(filename)[1]}"
     output_path = os.path.join(OUTPUT_DIR, output_filename)
     
     try:
-        # Perform video cropping using FFmpeg
-        (
-            ffmpeg
-            .input(input_path)
-            .crop(x, y, width, height)
-            .output(output_path)
-            .run(capture_stdout=True, capture_stderr=True, overwrite_output=True)
-        )
+        # Prepare ffmpeg command
+        stream = ffmpeg.input(input_path)
+        
+        # Apply crop
+        stream = stream.crop(x, y, width, height)
+        
+        # Apply grayscale if requested
+        if grayscale:
+            stream = stream.filter('colorchannelmixer', 
+                                  r='0.299', g='0.587', b='0.114',
+                                  rr='1', gg='1', bb='1')
+            # Alternative approach using format filter:
+            # stream = stream.filter('format', 'gray')
+        
+        # Output processed video
+        stream = stream.output(output_path)
+        
+        # Run ffmpeg command
+        stream.run(capture_stdout=True, capture_stderr=True, overwrite_output=True)
         
         return {
             "filename": output_filename,

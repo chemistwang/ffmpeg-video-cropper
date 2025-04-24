@@ -1,5 +1,12 @@
 import React, { useRef, useState, useEffect } from "react";
-import { Box, Button, Stack, Typography } from "@mui/material";
+import {
+  Box,
+  Button,
+  Stack,
+  Typography,
+  FormControlLabel,
+  Checkbox,
+} from "@mui/material";
 import CropIcon from "@mui/icons-material/Crop";
 import UndoIcon from "@mui/icons-material/Undo";
 import axios from "axios";
@@ -23,6 +30,7 @@ const VideoCropper = ({ videoData, onVideoCrop, setLoading, setError }) => {
     width: 0,
     height: 0,
   });
+  const [grayscale, setGrayscale] = useState(false);
 
   // Get video dimensions when it's loaded
   useEffect(() => {
@@ -216,6 +224,7 @@ const VideoCropper = ({ videoData, onVideoCrop, setLoading, setError }) => {
       formData.append("y", Math.round(cropArea.y));
       formData.append("width", Math.round(cropArea.width));
       formData.append("height", Math.round(cropArea.height));
+      formData.append("grayscale", grayscale);
 
       const response = await axios.post("/api/videos/crop", formData);
 
@@ -223,6 +232,7 @@ const VideoCropper = ({ videoData, onVideoCrop, setLoading, setError }) => {
         filename: response.data.filename,
         url: response.data.url,
         cropArea: cropArea,
+        grayscale: grayscale,
       });
     } catch (error) {
       console.error("Error cropping video:", error);
@@ -248,6 +258,11 @@ const VideoCropper = ({ videoData, onVideoCrop, setLoading, setError }) => {
       width: initialWidth,
       height: initialHeight,
     });
+    setGrayscale(false);
+  };
+
+  const handleGrayscaleChange = (event) => {
+    setGrayscale(event.target.checked);
   };
 
   return (
@@ -292,6 +307,7 @@ const VideoCropper = ({ videoData, onVideoCrop, setLoading, setError }) => {
             left: `${(cropArea.x / videoDimensions.width) * 100}%`,
             width: `${(cropArea.width / videoDimensions.width) * 100}%`,
             height: `${(cropArea.height / videoDimensions.height) * 100}%`,
+            filter: grayscale ? "grayscale(1)" : "none",
           }}
         >
           <div className="crop-handle nw" data-handle="nw"></div>
@@ -299,6 +315,19 @@ const VideoCropper = ({ videoData, onVideoCrop, setLoading, setError }) => {
           <div className="crop-handle sw" data-handle="sw"></div>
           <div className="crop-handle se" data-handle="se"></div>
         </Box>
+      </Box>
+
+      <Box sx={{ mt: 2, mb: 2 }}>
+        <FormControlLabel
+          control={
+            <Checkbox
+              checked={grayscale}
+              onChange={handleGrayscaleChange}
+              color="primary"
+            />
+          }
+          label="生成灰度视频"
+        />
       </Box>
 
       <Stack direction="row" spacing={2} justifyContent="center" sx={{ mt: 3 }}>
