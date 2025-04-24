@@ -31,6 +31,7 @@ const VideoCropper = ({ videoData, onVideoCrop, setLoading, setError }) => {
     height: 0,
   });
   const [grayscale, setGrayscale] = useState(false);
+  const [isDraggingOverlay, setIsDraggingOverlay] = useState(false);
 
   // Get video dimensions when it's loaded
   useEffect(() => {
@@ -67,12 +68,22 @@ const VideoCropper = ({ videoData, onVideoCrop, setLoading, setError }) => {
 
   // Handle dragging of the crop box
   const handleMouseDown = (e) => {
+    e.preventDefault(); // 防止浏览器默认行为
+
     const overlay = overlayRef.current;
     const container = containerRef.current;
     const containerRect = container.getBoundingClientRect();
 
     const clientX = e.clientX || (e.touches && e.touches[0].clientX);
     const clientY = e.clientY || (e.touches && e.touches[0].clientY);
+
+    // 确定是否点击在裁剪框上
+    const overlayRect = overlay.getBoundingClientRect();
+    const isClickInsideOverlay =
+      clientX >= overlayRect.left &&
+      clientX <= overlayRect.right &&
+      clientY >= overlayRect.top &&
+      clientY <= overlayRect.bottom;
 
     // Check if we're clicking on a resize handle
     if (e.target.classList.contains("crop-handle")) {
@@ -82,26 +93,30 @@ const VideoCropper = ({ videoData, onVideoCrop, setLoading, setError }) => {
         x: clientX,
         y: clientY,
       });
+      setIsDraggingOverlay(true); // 设置为正在拖动
       return;
     }
 
-    // Otherwise we're moving the entire box
-    setIsDragging(true);
-    setResizing(null);
+    // Otherwise we're moving the entire box (只有点击在裁剪框内才移动)
+    if (isClickInsideOverlay) {
+      setIsDragging(true);
+      setResizing(null);
+      setIsDraggingOverlay(true); // 设置为正在拖动
 
-    const overlayRect = overlay.getBoundingClientRect();
+      // Calculate the mouse position relative to the overlay
+      setDragStart({
+        x: clientX - overlayRect.left + containerRect.left,
+        y: clientY - overlayRect.top + containerRect.top,
+      });
 
-    // Calculate the mouse position relative to the overlay
-    setDragStart({
-      x: clientX - overlayRect.left + containerRect.left,
-      y: clientY - overlayRect.top + containerRect.top,
-    });
-
-    setOriginalPosition({ ...cropArea });
+      setOriginalPosition({ ...cropArea });
+    }
   };
 
   const handleMouseMove = (e) => {
     if (!isDragging && !resizing) return;
+
+    e.preventDefault(); // 防止浏览器默认行为
 
     const container = containerRef.current;
     const containerRect = container.getBoundingClientRect();
@@ -210,9 +225,48 @@ const VideoCropper = ({ videoData, onVideoCrop, setLoading, setError }) => {
     }
   };
 
-  const handleMouseUp = () => {
+  const handleMouseUp = (e) => {
+    e.preventDefault(); // 防止浏览器默认行为
     setIsDragging(false);
     setResizing(null);
+    setIsDraggingOverlay(false);
+  };
+
+  // 鼠标离开时也停止拖动
+  const handleMouseLeave = (e) => {
+    e.preventDefault();
+    if (isDragging || resizing) {
+      setIsDragging(false);
+      setResizing(null);
+      setIsDraggingOverlay(false);
+    }
+  };
+
+  // 触摸事件处理
+  const handleTouchStart = (e) => {
+    handleMouseDown({
+      preventDefault: () => {},
+      clientX: e.touches[0].clientX,
+      clientY: e.touches[0].clientY,
+      target: e.target,
+    });
+  };
+
+  const handleTouchMove = (e) => {
+    if (isDragging || resizing) {
+      e.preventDefault(); // 只有在拖动中才阻止默认滚动
+      handleMouseMove({
+        preventDefault: () => {},
+        clientX: e.touches[0].clientX,
+        clientY: e.touches[0].clientY,
+      });
+    }
+  };
+
+  const handleTouchEnd = (e) => {
+    handleMouseUp({
+      preventDefault: () => {},
+    });
   };
 
   const handleCrop = async () => {
@@ -277,14 +331,15 @@ const VideoCropper = ({ videoData, onVideoCrop, setLoading, setError }) => {
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseUp}
-        onTouchStart={handleMouseDown}
-        onTouchMove={handleMouseMove}
-        onTouchEnd={handleMouseUp}
+        onMouseLeave={handleMouseLeave}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
         sx={{
           position: "relative",
-          touchAction: "none",
+          touchAction: isDraggingOverlay ? "none" : "auto", // 只在拖动时禁用默认触摸行为
           maxWidth: "100%",
+          userSelect: "none", // 防止用户选择文本
         }}
       >
         <video
@@ -308,6 +363,8 @@ const VideoCropper = ({ videoData, onVideoCrop, setLoading, setError }) => {
             width: `${(cropArea.width / videoDimensions.width) * 100}%`,
             height: `${(cropArea.height / videoDimensions.height) * 100}%`,
             filter: grayscale ? "grayscale(1)" : "none",
+            cursor: isDragging ? "grabbing" : "grab", // 拖动时显示抓取状态的光标
+            transition: isDragging || resizing ? "none" : "all 0.1s", // 非拖动状态下有轻微过渡效果
           }}
         >
           <div className="crop-handle nw" data-handle="nw"></div>
