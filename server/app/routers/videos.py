@@ -3,7 +3,7 @@ import uuid
 import ffmpeg
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException
 from fastapi.responses import FileResponse
-from typing import Optional, bool
+from typing import Optional
 import aiofiles
 import shutil
 from fastapi.logger import logger
