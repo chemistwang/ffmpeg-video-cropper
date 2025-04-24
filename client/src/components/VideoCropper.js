@@ -33,6 +33,39 @@ const VideoCropper = ({ videoData, onVideoCrop, setLoading, setError }) => {
   const [grayscale, setGrayscale] = useState(false);
   const [isDraggingOverlay, setIsDraggingOverlay] = useState(false);
 
+  // 获取鼠标在视频中的实际位置
+  const getMousePositionInVideo = (clientX, clientY) => {
+    const container = containerRef.current;
+    const containerRect = container.getBoundingClientRect();
+    const video = videoRef.current;
+
+    // 计算鼠标相对于视频容器的位置
+    const relativeX = clientX - containerRect.left;
+    const relativeY = clientY - containerRect.top;
+
+    // 将相对位置转换为实际视频坐标（考虑缩放）
+    const scaleX = videoDimensions.width / video.offsetWidth;
+    const scaleY = videoDimensions.height / video.offsetHeight;
+
+    const videoX = relativeX * scaleX;
+    const videoY = relativeY * scaleY;
+
+    return { x: videoX, y: videoY };
+  };
+
+  // 将裁剪框移动到鼠标位置中心
+  const centerCropAreaAtMouse = (mouseX, mouseY, cropWidth, cropHeight) => {
+    // 计算以鼠标为中心的裁剪框左上角坐标
+    let x = mouseX - cropWidth / 2;
+    let y = mouseY - cropHeight / 2;
+
+    // 确保裁剪框不超出视频边界
+    x = Math.max(0, Math.min(videoDimensions.width - cropWidth, x));
+    y = Math.max(0, Math.min(videoDimensions.height - cropHeight, y));
+
+    return { x, y, width: cropWidth, height: cropHeight };
+  };
+
   // Get video dimensions when it's loaded
   useEffect(() => {
     const video = videoRef.current;
@@ -43,9 +76,11 @@ const VideoCropper = ({ videoData, onVideoCrop, setLoading, setError }) => {
 
       setVideoDimensions({ width: videoWidth, height: videoHeight });
 
-      // Set initial crop area to be 50% of video centered
+      // 设置初始裁剪框大小（视频尺寸的一半）
       const initialWidth = Math.round(videoWidth / 2);
       const initialHeight = Math.round(videoHeight / 2);
+
+      // 初始位置在视频中心
       const initialX = Math.round((videoWidth - initialWidth) / 2);
       const initialY = Math.round((videoHeight - initialHeight) / 2);
 
@@ -66,13 +101,32 @@ const VideoCropper = ({ videoData, onVideoCrop, setLoading, setError }) => {
     }
   }, [videoData]);
 
+  // 允许在视频区域双击时移动裁剪框到鼠标位置
+  const handleDoubleClick = (e) => {
+    e.preventDefault();
+
+    // 获取鼠标在视频中的位置
+    const clientX = e.clientX || (e.touches && e.touches[0].clientX);
+    const clientY = e.clientY || (e.touches && e.touches[0].clientY);
+    const { x: mouseX, y: mouseY } = getMousePositionInVideo(clientX, clientY);
+
+    // 保持当前裁剪框尺寸，移动到鼠标位置
+    const newCropArea = centerCropAreaAtMouse(
+      mouseX,
+      mouseY,
+      cropArea.width,
+      cropArea.height
+    );
+
+    setCropArea(newCropArea);
+  };
+
   // Handle dragging of the crop box
   const handleMouseDown = (e) => {
     e.preventDefault(); // 防止浏览器默认行为
 
     const overlay = overlayRef.current;
     const container = containerRef.current;
-    const containerRect = container.getBoundingClientRect();
 
     const clientX = e.clientX || (e.touches && e.touches[0].clientX);
     const clientY = e.clientY || (e.touches && e.touches[0].clientY);
@@ -97,19 +151,32 @@ const VideoCropper = ({ videoData, onVideoCrop, setLoading, setError }) => {
       return;
     }
 
-    // Otherwise we're moving the entire box (只有点击在裁剪框内才移动)
+    // Otherwise we're moving the entire box
     if (isClickInsideOverlay) {
       setIsDragging(true);
       setResizing(null);
-      setIsDraggingOverlay(true); // 设置为正在拖动
+      setIsDraggingOverlay(true);
 
-      // Calculate the mouse position relative to the overlay
+      // 将鼠标点击位置记录为拖动起点
       setDragStart({
-        x: clientX - overlayRect.left + containerRect.left,
-        y: clientY - overlayRect.top + containerRect.top,
+        x: clientX,
+        y: clientY,
       });
 
       setOriginalPosition({ ...cropArea });
+    } else {
+      // 如果点击在裁剪框外部，直接移动裁剪框到鼠标位置
+      const { x: mouseX, y: mouseY } = getMousePositionInVideo(
+        clientX,
+        clientY
+      );
+      const newCropArea = centerCropAreaAtMouse(
+        mouseX,
+        mouseY,
+        cropArea.width,
+        cropArea.height
+      );
+      setCropArea(newCropArea);
     }
   };
 
@@ -199,15 +266,22 @@ const VideoCropper = ({ videoData, onVideoCrop, setLoading, setError }) => {
 
       setCropArea(newCrop);
     } else if (isDragging) {
-      // We're moving the whole box
-      const deltaX = (clientX - dragStart.x) * scaleX;
-      const deltaY = (clientY - dragStart.y) * scaleY;
+      // 拖动整个裁剪框时，移动到鼠标下方
+      const currentMousePosition = getMousePositionInVideo(clientX, clientY);
+      const lastMousePosition = getMousePositionInVideo(
+        dragStart.x,
+        dragStart.y
+      );
 
-      // Calculate new position
+      // 计算鼠标移动的距离
+      const deltaX = currentMousePosition.x - lastMousePosition.x;
+      const deltaY = currentMousePosition.y - lastMousePosition.y;
+
+      // 更新裁剪框位置，跟随鼠标移动
       let newX = originalPosition.x + deltaX;
       let newY = originalPosition.y + deltaY;
 
-      // Constrain to video boundaries
+      // 确保不超出视频边界
       newX = Math.max(
         0,
         Math.min(videoDimensions.width - cropArea.width, newX)
@@ -322,7 +396,7 @@ const VideoCropper = ({ videoData, onVideoCrop, setLoading, setError }) => {
   return (
     <Box sx={{ width: "100%" }}>
       <Typography variant="body1" sx={{ mb: 2 }}>
-        Drag to move the crop area. Drag the handles to resize.
+        拖动可移动裁剪区域，点击视频可将裁剪框移至指定位置，拖拽边角可调整大小。
       </Typography>
 
       <Box
@@ -332,6 +406,7 @@ const VideoCropper = ({ videoData, onVideoCrop, setLoading, setError }) => {
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseLeave}
+        onDoubleClick={handleDoubleClick}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
@@ -393,14 +468,14 @@ const VideoCropper = ({ videoData, onVideoCrop, setLoading, setError }) => {
           startIcon={<UndoIcon />}
           onClick={handleReset}
         >
-          Reset
+          重置
         </Button>
         <Button
           variant="contained"
           startIcon={<CropIcon />}
           onClick={handleCrop}
         >
-          Crop Video
+          裁剪视频
         </Button>
       </Stack>
     </Box>
