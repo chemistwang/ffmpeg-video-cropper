@@ -68,35 +68,39 @@ async def crop_video(
     output_path = os.path.join(OUTPUT_DIR, output_filename)
     
     try:
-        # Prepare ffmpeg command
-        stream = ffmpeg.input(input_path)
+        # 使用FFmpeg命令行参数，而不是ffmpeg-python的高级API
+        # 这样更清晰地控制命令行选项
+        ffmpeg_cmd = (
+            ffmpeg
+            .input(input_path)
+            .crop(x, y, width, height)
+        )
         
-        # Apply crop
-        stream = stream.crop(x, y, width, height)
-        
-        # Apply grayscale if requested
+        # 如果需要灰度处理，使用格式化滤镜
         if grayscale:
-            stream = stream.filter('colorchannelmixer', 
-                                  r='0.299', g='0.587', b='0.114',
-                                  rr='1', gg='1', bb='1')
-            # Alternative approach using format filter:
-            # stream = stream.filter('format', 'gray')
+            # 使用format滤镜而不是colorchannelmixer
+            ffmpeg_cmd = ffmpeg_cmd.filter('format', 'gray')
+            
+        # 输出
+        ffmpeg_cmd = ffmpeg_cmd.output(output_path, **{'c:a': 'copy'})
         
-        # Output processed video
-        stream = stream.output(output_path)
+        # 打印完整命令用于调试
+        print(" ".join(ffmpeg_cmd.compile()))
         
-        # Run ffmpeg command
-        stream.run(capture_stdout=True, capture_stderr=True, overwrite_output=True)
+        # 执行命令
+        ffmpeg_cmd.run(capture_stdout=True, capture_stderr=True, overwrite_output=True)
         
         return {
             "filename": output_filename,
             "url": f"/static/videos/output/{output_filename}"
         }
     except ffmpeg.Error as e:
-        # Handle FFmpeg error
+        # 打印详细错误信息
+        error_msg = e.stderr.decode() if e.stderr else str(e)
+        print(f"FFmpeg错误: {error_msg}")
         raise HTTPException(
             status_code=500,
-            detail=f"FFmpeg error: {e.stderr.decode() if e.stderr else str(e)}"
+            detail=f"FFmpeg error: {error_msg}"
         )
 
 @router.get("/download/{filename}")
